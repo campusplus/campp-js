@@ -119,7 +119,7 @@ export default [
       "params": ["blockNum", "onlyVirtual"]
     },
     {
-      "api": "database_api",
+      "api": "campp_api",
       "method": "get_state",
       "params": ["path"]
     },

@@ -19,6 +19,8 @@ import {
     sign as signRequest
 } from '@steemit/rpc-auth';
 
+import Post from './campp/posts'
+
 class Steem extends EventEmitter {
     constructor(options = {}) {
         super(options);
@@ -26,7 +28,11 @@ class Steem extends EventEmitter {
         this._setLogger(options);
         this.options = options;
         this.seqNo = 0; // used for rpc calls
+        this.Post = new Post(options)
+
         methods.forEach(method => {
+            if(method.api === 'campp_api')
+                return
             const methodName = method.method_name || camelCase(method.method);
             const methodParams = method.params || [];
 
@@ -46,11 +52,12 @@ class Steem extends EventEmitter {
                 return this[`${methodName}With`](options, callback);
             };
 
-	          this[`${methodName}WithAsync`] = Promise.promisify(this[`${methodName}With`]);
+            this[`${methodName}WithAsync`] = Promise.promisify(this[`${methodName}With`]);
             this[`${methodName}Async`] = Promise.promisify(this[methodName]);
         });
         this.callAsync = Promise.promisify(this.call);
         this.signedCallAsync = Promise.promisify(this.signedCall);
+        this.getStateAsync = this.Post.getStateAsync
     }
 
     _setTransport(options) {
