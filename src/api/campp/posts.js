@@ -2,7 +2,7 @@
 * @Author: Tai Dong <dongtaiit@gmail.com>
 * @Date:   2019-09-09 22:47:14
 * @Last Modified by:   Tai Dong
-* @Last Modified time: 2019-09-09 23:06:44
+* @Last Modified time: 2019-09-10 16:00:23
 */
 
 import axios from 'axios'
@@ -116,11 +116,11 @@ class Post {
   async getStateAsync(path = 'trending') {
     path = decodeURIComponent(path)
 
-    const orignalPath = path.split('/')[0]
+    const orignalPath = path.split('/')
 
     let url = `http://${self.config.campp_api}/posts`
 
-    switch (orignalPath) {
+    switch (orignalPath[0]) {
       case 'created':
         {
           url += '?type=new'
