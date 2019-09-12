@@ -1,5 +1,5 @@
 {
-  "name": "@steemit/steem-js",
+  "name": "@campusplus/camp-js",
   "version": "0.7.8",
   "description": "Campp-js based on steemjs, re-write for campus plus",
   "main": "lib/index.js",
@@ -18,7 +18,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/steemit/steem-js.git"
+    "url": "git+https://github.com/campusplus/campp-js.git"
   },
   "keywords": [
     "steem",

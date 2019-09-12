@@ -39,7 +39,7 @@ export default [
       "params": ["query"]
     },
     {
-      "api": "database_api",
+      "api": "campp_api",
       "method": "get_discussions_by_trending",
       "params": ["query"]
     },

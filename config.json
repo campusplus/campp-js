@@ -7,5 +7,5 @@
   "stage_uri": "https://api.steemitstage.com",
   "address_prefix": "STM",
   "chain_id": "0000000000000000000000000000000000000000000000000000000000000000",
-  "campp_api": "52.163.117.18:3000"
+  "campp_api": "http://52.163.117.18:3000"
 }

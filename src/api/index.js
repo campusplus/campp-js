@@ -58,6 +58,7 @@ class Steem extends EventEmitter {
         this.callAsync = Promise.promisify(this.call);
         this.signedCallAsync = Promise.promisify(this.signedCall);
         this.getStateAsync = this.Post.getStateAsync
+        this.getDiscussionsByTrendingAsync = this.Post.getDiscussionsByTrendingAsync
     }
 
     _setTransport(options) {

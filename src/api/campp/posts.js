@@ -2,7 +2,7 @@
 * @Author: Tai Dong <dongtaiit@gmail.com>
 * @Date:   2019-09-09 22:47:14
 * @Last Modified by:   Tai Dong
-* @Last Modified time: 2019-09-10 16:00:23
+* @Last Modified time: 2019-09-12 11:17:39
 */
 
 import axios from 'axios'
@@ -17,7 +17,7 @@ class Post {
       UserProfile3: /^\/(@[\w\.\d-]+)\/[\w\.\d-]+/,
       CategoryFilters: /^\/(hot|trending|promoted|payout|payout_comments|created)\/?$/gi,
       PostNoCategory: /^\/(@[\w\.\d-]+)\/([\w\d-]+)/,
-      Post: /^\/([\w\d\-\/]+)\/(\@[\w\d\.-]+)\/([\w\d-]+)\/?($|\?)/,
+      Post: /([\w\d\-\/]+)\/(\@[\w\d\.-]+)\/([\w\d-]+)\/?($|\?)/,
       PostJson: /^\/([\w\d\-\/]+)\/(\@[\w\d\.-]+)\/([\w\d-]+)(\.json)$/,
       UserJson: /^\/(@[\w\.\d-]+)(\.json)$/,
       UserNameJson: /^.*(?=(\.json))/,
@@ -27,7 +27,47 @@ class Post {
 
   }
 
+  _formatPostContent(post){
+    if(!post)
+      return post
 
+      let tags = post.tags || []
+      let body = post.content || post.shortDesc
+
+      return {
+        "post_id": post.postId,
+        "author": post.user.username,
+        "permlink": post.postId,
+        "category": tags[0] || 'unknown',
+        "title": post.title,
+        "body": body,
+        "json_metadata": JSON.stringify({
+          "image": [post.thumbnail]
+        }),
+        "created": new Date(post.createdAt),
+        "last_update": new Date(post.updatedAt),
+        "depth": 0,
+        "children": post.count_comment,
+        "net_rshares": 425554588016215,
+        "last_payout": new Date(post.createdAt),
+        "cashout_time": new Date(),
+        "total_payout_value": "0.000 USD",
+        "curator_payout_value": "0.000 USD",
+        "pending_payout_value": post.totalReward + " USD",
+        "promoted": "0.000 USD",
+        "replies": [],
+        "body_length": body.length,
+        "active_votes": [],
+        "author_reputation": 21765957547111,
+        "parent_author": "",
+        "parent_permlink": post.user.username,
+        "url": `/${tags[0]}/${post.user.username}/${post.postId}`,
+        "root_title": post.title,
+        "beneficiaries": [],
+        "max_accepted_payout": "1000000.000 USD",
+        "percent_steem_dollars": 10000
+      }
+  }
   _buildData(path, posts) {
     posts = posts || []
     const orignalPath = path.split('/')[0]
@@ -50,6 +90,7 @@ class Post {
       "accounts": {},
       "content": {},
       "tag_idx": {
+        "trending": []
 
       },
       "discussion_idx": {
@@ -60,65 +101,54 @@ class Post {
     }
 
     let discussionIdx = result.discussion_idx[""].trending
-    result.tag_idx[orignalPath] = result.tag_idx[orignalPath] || []
-    let tags = result.tag_idx[orignalPath] || []
     let tagsTemp = {}
 
     posts.map(post => {
       post.tags.map(tag => {
         if (!tagsTemp[tag]) {
           tagsTemp[tag] = 1
-          tags.push(tag)
+          result.tag_idx.trending.push(tag)
         }
       })
 
       discussionIdx.push(`${post.user.username}/${post.postId}`)
-
-      let body = post.content || post.shortDesc
-      result.content[`${post.user.username}/${post.postId}`] = {
-        "post_id": post.postId,
-        "author": post.user.username,
-        "permlink": post.postId,
-        "category": tags[0] || 'unknown category',
-        "title": post.title,
-        "body": body,
-        "json_metadata": JSON.stringify({
-          "image": [post.thumbnail]
-        }),
-        "created": new Date(post.createdAt),
-        "last_update": new Date(post.updatedAt),
-        "depth": 0,
-        "children": post.count_comment,
-        "net_rshares": 425554588016215,
-        "last_payout": new Date(post.createdAt),
-        "cashout_time": now,
-        "total_payout_value": "0.000 USD",
-        "curator_payout_value": "0.000 USD",
-        "pending_payout_value": post.totalReward + " USD",
-        "promoted": "0.000 USD",
-        "replies": [],
-        "body_length": body.length,
-        "active_votes": [],
-        "author_reputation": 21765957547111,
-        "parent_author": "",
-        "parent_permlink": post.user.username,
-        "url": `/${tags[0]}/${post.user.username}/${post.postId}`,
-        "root_title": post.title,
-        "beneficiaries": [],
-        "max_accepted_payout": "1000000.000 USD",
-        "percent_steem_dollars": 10000
-      }
+      result.content[`${post.user.username}/${post.postId}`] = self._formatPostContent(post)
     })
 
     return result
   }
 
+  /*
+   {
+     tag,
+     limit,
+     start_author,
+     start_permlink
+   }     
+   */
+  async getDiscussionsByTrendingAsync(query){
+    console.log('query getDiscussionsByTrendingAsync', query, typeof query)
+    let url = `${self.config.campp_api}/posts?type=hot&pageSize=${query.pageSize || 10}&lastPostId=${query.start_permlink || 0}`
+    if(query.tag)
+      url += `&tag=${query.tag}`
+    const posts = await axios.get(url)
+      .then(res => {
+        return res.data.data
+      })
+      .catch(ex =>{
+        console.log('ex', ex)
+        return null
+      })
+    return posts.map(item => self._formatPostContent(item))
+  }
+
   async getStateAsync(path = 'trending') {
     path = decodeURIComponent(path)
+    console.log('getStateAsync', path)
 
     const orignalPath = path.split('/')
 
-    let url = `http://${self.config.campp_api}/posts`
+    let url = `${self.config.campp_api}/posts`
 
     switch (orignalPath[0]) {
       case 'created':
@@ -138,9 +168,9 @@ class Post {
 
       default:
         {
-          if (/\w+\/@\w+\/[\w, -]+/.test(path)) {
+          if (self.routeRegex.Post.test(path)) {
             const paths = path.split('/')
-            url += `?type=posts&id=${paths[paths.length - 1]}`
+            url += `?type=new&id=${paths[paths.length - 1]}`
           }
 
           break
@@ -157,10 +187,6 @@ class Post {
       })
 
     return self._buildData(path, posts);
-  }
-
-  async getDiscussionsByTrendingAsync() {
-
   }
 }
 
