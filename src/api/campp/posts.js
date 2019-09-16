@@ -2,7 +2,7 @@
 * @Author: Tai Dong <dongtaiit@gmail.com>
 * @Date:   2019-09-09 22:47:14
 * @Last Modified by:   Tai Dong
-* @Last Modified time: 2019-09-12 11:17:39
+* @Last Modified time: 2019-09-16 09:31:59
 */
 
 import axios from 'axios'
@@ -11,15 +11,15 @@ let self
 class Post {
   constructor(config) {
     this.routeRegex = {
-      PostsIndex: /^\/(@[\w\.\d-]+)\/feed\/?$/,
-      UserProfile1: /^\/(@[\w\.\d-]+)\/?$/,
-      UserProfile2: /^\/(@[\w\.\d-]+)\/(blog|posts|comments|transfers|curation-rewards|author-rewards|permissions|created|recent-replies|feed|password|followed|followers|settings)\/?$/,
-      UserProfile3: /^\/(@[\w\.\d-]+)\/[\w\.\d-]+/,
-      CategoryFilters: /^\/(hot|trending|promoted|payout|payout_comments|created)\/?$/gi,
-      PostNoCategory: /^\/(@[\w\.\d-]+)\/([\w\d-]+)/,
+      PostsIndex: /(@[\w\.\d-]+)\/feed\/?$/,
+      UserProfile1: /(@[\w\.\d-]+)\/?$/,
+      UserProfile2: /(@[\w\.\d-]+)\/(blog|posts|comments|transfers|curation-rewards|author-rewards|permissions|created|recent-replies|feed|password|followed|followers|settings)\/?$/,
+      UserProfile3: /(@[\w\.\d-]+)\/[\w\.\d-]+/,
+      CategoryFilters: /(hot|trending|promoted|payout|payout_comments|created)\/?$/gi,
+      PostNoCategory: /(@[\w\.\d-]+)\/([\w\d-]+)/,
       Post: /([\w\d\-\/]+)\/(\@[\w\d\.-]+)\/([\w\d-]+)\/?($|\?)/,
-      PostJson: /^\/([\w\d\-\/]+)\/(\@[\w\d\.-]+)\/([\w\d-]+)(\.json)$/,
-      UserJson: /^\/(@[\w\.\d-]+)(\.json)$/,
+      PostJson: /([\w\d\-\/]+)\/(\@[\w\d\.-]+)\/([\w\d-]+)(\.json)$/,
+      UserJson: /(@[\w\.\d-]+)(\.json)$/,
       UserNameJson: /^.*(?=(\.json))/,
     }
     this.config = config
@@ -48,6 +48,7 @@ class Post {
         "last_update": new Date(post.updatedAt),
         "depth": 0,
         "children": post.count_comment,
+        "share_count": post.count_share || 0,
         "net_rshares": 425554588016215,
         "last_payout": new Date(post.createdAt),
         "cashout_time": new Date(),
@@ -142,44 +143,77 @@ class Post {
     return posts.map(item => self._formatPostContent(item))
   }
 
-  async getStateAsync(path = 'trending') {
+  _buildPostAPI(path){
     path = decodeURIComponent(path)
-    console.log('getStateAsync', path)
-
-    const orignalPath = path.split('/')
-
     let url = `${self.config.campp_api}/posts`
 
-    switch (orignalPath[0]) {
-      case 'created':
-        {
-          url += '?type=new'
-          break;
-        }
-      case 'hot':
-      case 'trending':
-        {
-          url += '?type=hot'
-          if(orignalPath[1]){
-            url += `&tag=${orignalPath[1]}`
-          }
-          break;
-        }
-
-      default:
-        {
-          if (self.routeRegex.Post.test(path)) {
-            const paths = path.split('/')
-            url += `?type=new&id=${paths[paths.length - 1]}`
-          }
-
-          break
-        }
+    let match = path.match(self.routeRegex.PostsIndex) //user's feed
+    if(match){
+      url += `?type=feed`
+      return url
     }
 
-    const posts = await axios.get(url)
+    match = path.match(self.routeRegex.UserProfile1) //user's posts
+    if(match){
+      url += `?type=new&username=${match[1]}`
+      return url
+    }
+
+    match = path.match(self.routeRegex.Post) //post detail: /trending/@tino/perm-link
+    if(match){
+      url += `?type=new&id=${match[3]}`
+      return url
+    }
+
+    match = path.match(self.routeRegex.PostNoCategory) //@tino/some-tag
+    if(match){
+      console.log('match 2')
+      let postId = match[2]
+      url += `?type=new&username=${match[1].replace('@', '')}&tag=${match[2]}`
+      return url
+    }
+
+    match =
+        path.match(
+            /(hot|trending|promoted|payout|payout_comments|created)\/?$/
+        ) ||
+        path.match(
+            /(hot|trending|promoted|payout|payout_comments|created)\/([\w\s\d-]+)\/?$/
+        );
+    if (match) {
+        let type = match[1] == 'created'? 'new' : 'hot'
+        url += `?type=${type}`
+        if(match[2])
+          url += `&tag=${match[2]}`
+    }
+
+    return url
+  }
+  async getStateAsync(path = 'trending', accessToken) {
+    console.log('getStateAsync', path)
+
+    let url = self._buildPostAPI(path)
+
+    let options = {
+      validateStatus: function (status) {
+        return status >= 200 && status < 500;
+      }
+    }
+
+    if(accessToken){
+      options.headers = {
+        Authorization: `Bearer ${accessToken}`
+      }
+    }
+    console.log('url', url)
+    const posts = await axios.get(url, options)
       .then(res => {
-        return res.data.data
+        if(res.data.error){
+          console.error('fetch API error', JSON.stringify(res.data.error, null, 2))
+          return null;
+        }
+
+        return res.data.data;
       })
       .catch(ex =>{
         console.log('ex', ex)
@@ -187,6 +221,27 @@ class Post {
       })
 
     return self._buildData(path, posts);
+  }
+
+  async getTopAuthorAsync(){
+    let url = `${self.config.campp_api}/users/top-authors`
+    return axios.get(url, {
+      validateStatus: function (status) {
+        return status >= 200 && status < 500;
+      }
+    })
+      .then(res => {
+        if(res.data.error){
+          console.error('fetch API error', JSON.stringify(res.data.error, null, 2))
+          return null;
+        }
+
+        return res.data.data;
+      })
+      .catch(ex =>{
+        console.log('ex', ex)
+        return []
+      })
   }
 }
 
