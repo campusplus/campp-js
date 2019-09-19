@@ -2,7 +2,7 @@
 * @Author: Tai Dong <dongtaiit@gmail.com>
 * @Date:   2019-09-09 22:47:14
 * @Last Modified by:   Tai Dong
-* @Last Modified time: 2019-09-16 09:31:59
+* @Last Modified time: 2019-09-19 11:33:46
 */
 
 import axios from 'axios'
@@ -69,7 +69,7 @@ class Post {
         "percent_steem_dollars": 10000
       }
   }
-  _buildData(path, posts) {
+  _buildData(path, posts, type) {
     posts = posts || []
     const orignalPath = path.split('/')[0]
     const now = new Date()
@@ -95,13 +95,15 @@ class Post {
 
       },
       "discussion_idx": {
-        "": {
-          "trending": []
-        }
+        "": {}
       }
     }
-
-    let discussionIdx = result.discussion_idx[""].trending
+    let discussionIdx
+    if(type){
+      result.discussion_idx[""][type] = result.discussion_idx[""][type] || []
+      discussionIdx = result.discussion_idx[""][type]
+    }
+    
     let tagsTemp = {}
 
     posts.map(post => {
@@ -111,8 +113,9 @@ class Post {
           result.tag_idx.trending.push(tag)
         }
       })
+      if(discussionIdx)
+        discussionIdx.push(`${post.user.username}/${post.postId}`)
 
-      discussionIdx.push(`${post.user.username}/${post.postId}`)
       result.content[`${post.user.username}/${post.postId}`] = self._formatPostContent(post)
     })
 
@@ -146,31 +149,29 @@ class Post {
   _buildPostAPI(path){
     path = decodeURIComponent(path)
     let url = `${self.config.campp_api}/posts`
-
     let match = path.match(self.routeRegex.PostsIndex) //user's feed
     if(match){
       url += `?type=feed`
-      return url
+      return {url, type: 'feed'}
     }
 
     match = path.match(self.routeRegex.UserProfile1) //user's posts
     if(match){
       url += `?type=new&username=${match[1]}`
-      return url
+      return {url}
     }
 
     match = path.match(self.routeRegex.Post) //post detail: /trending/@tino/perm-link
     if(match){
       url += `?type=new&id=${match[3]}`
-      return url
+      return {url}
     }
 
     match = path.match(self.routeRegex.PostNoCategory) //@tino/some-tag
     if(match){
-      console.log('match 2')
       let postId = match[2]
       url += `?type=new&username=${match[1].replace('@', '')}&tag=${match[2]}`
-      return url
+      return {url}
     }
 
     match =
@@ -181,18 +182,22 @@ class Post {
             /(hot|trending|promoted|payout|payout_comments|created)\/([\w\s\d-]+)\/?$/
         );
     if (match) {
-        let type = match[1] == 'created'? 'new' : 'hot'
-        url += `?type=${type}`
+        url += `?type=${match[1] == 'created'? 'new' : 'hot'}`
         if(match[2])
           url += `&tag=${match[2]}`
+        return {url, type: match[1]}
     }
 
-    return url
+    return {
+      url,
+      type
+    }
   }
+
   async getStateAsync(path = 'trending', accessToken) {
     console.log('getStateAsync', path)
 
-    let url = self._buildPostAPI(path)
+    let {url, type} = self._buildPostAPI(path)
 
     let options = {
       validateStatus: function (status) {
@@ -220,7 +225,7 @@ class Post {
         return null
       })
 
-    return self._buildData(path, posts);
+    return self._buildData(path, posts, type);
   }
 
   async getTopAuthorAsync(){
